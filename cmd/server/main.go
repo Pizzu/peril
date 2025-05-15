@@ -10,7 +10,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-const rabbitMqConnStr string = "amqp://guest:guest@localhost:15672/"
+const rabbitMqConnStr string = "amqp://guest:guest@localhost:5672/"
 
 func main() {
 	fmt.Println("Starting Peril server...")
