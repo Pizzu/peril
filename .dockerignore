@@ -1,0 +1,33 @@
+Dockerfile
+docker-compose.yaml
+# Binaries and build artifacts
+/bin/
+*.exe
+*.out
+*.o
+*.a
+*.so
+*.dll
+
+# Go modules and dependencies
+/pkg/
+vendor/
+
+# Git and editor files
+.git/
+.gitignore
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs and temp files
+*.log
+*.tmp
+*.cache
+*.test
+
+# Docker and CI/CD specific
+.dockerignore
+.env
+coverage.out
