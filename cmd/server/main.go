@@ -12,36 +12,37 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-const rabbitMqConnStr string = "amqp://guest:guest@localhost:5672/"
-
 func main() {
-	fmt.Println("Starting Peril server...")
-	conn, err := amqp.Dial(rabbitMqConnStr)
+	const rabbitConnString = "amqp://guest:guest@localhost:5672/"
 
+	conn, err := amqp.Dial(rabbitConnString)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatalf("could not connect to RabbitMQ: %v", err)
 	}
-
 	defer conn.Close()
-	fmt.Println("Connection successfully made...")
+	fmt.Println("Peril game server connected to RabbitMQ!")
 
-	channel, err := conn.Channel()
-
+	publishCh, err := conn.Channel()
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatalf("could not create channel: %v", err)
 	}
 
-	playingState := routing.PlayingState{IsPaused: true}
-
-	err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, playingState)
-
+	err = pubsub.PublishJSON(
+		publishCh,
+		routing.ExchangePerilDirect,
+		routing.PauseKey,
+		routing.PlayingState{
+			IsPaused: true,
+		},
+	)
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Printf("could not publish time: %v", err)
 	}
+
+	fmt.Println("Pause message sent!")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 	log.Println("Program gracefully stopped")
-
 }
