@@ -60,7 +60,7 @@ func main() {
 				log.Printf("could not publish time: %v", err)
 			}
 		case "quit":
-			log.Println("goodbye!")
+			gamelogic.PrintQuit()
 			return
 		default:
 			fmt.Println("unknown command")
