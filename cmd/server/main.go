@@ -20,6 +20,13 @@ func main() {
 	defer conn.Close()
 	fmt.Println("Peril game server connected to RabbitMQ!")
 
+	gameLogRoutingKey := fmt.Sprintf("%s.*", routing.GameLogSlug)
+	_, _, err = pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic, routing.GameLogSlug, gameLogRoutingKey, pubsub.SimpleQueueDurable)
+
+	if err != nil {
+		log.Fatalf("could not subscribe to gamelog: %v", err)
+	}
+
 	publishCh, err := conn.Channel()
 	if err != nil {
 		log.Fatalf("could not create channel: %v", err)
