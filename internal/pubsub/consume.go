@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -31,12 +32,13 @@ func DeclareAndBind(conn *amqp.Connection, exchange, queueName, key string, simp
 	}
 
 	var queue amqp.Queue
+	var args amqp.Table = amqp.Table{"x-dead-letter-exchange": routing.ExchangeDeadLetterFanout}
 
 	switch simpleQueueType {
 	case SimpleQueueDurable:
-		queue, err = channel.QueueDeclare(queueName, true, false, false, false, nil)
+		queue, err = channel.QueueDeclare(queueName, true, false, false, false, args)
 	case SimpleQueueTransient:
-		queue, err = channel.QueueDeclare(queueName, false, true, true, false, nil)
+		queue, err = channel.QueueDeclare(queueName, false, true, true, false, args)
 	default:
 		return nil, amqp.Queue{}, errors.New("wrong queue type")
 	}
