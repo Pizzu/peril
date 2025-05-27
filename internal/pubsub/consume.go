@@ -2,15 +2,13 @@ package pubsub
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"log"
 
-	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type Acktype int
+
 type SimpleQueueType int
 
 const (
@@ -24,78 +22,94 @@ const (
 	NackRequeue
 )
 
-func DeclareAndBind(conn *amqp.Connection, exchange, queueName, key string, simpleQueueType SimpleQueueType) (*amqp.Channel, amqp.Queue, error) {
-	channel, err := conn.Channel()
-
-	if err != nil {
-		return nil, amqp.Queue{}, err
-	}
-
-	var queue amqp.Queue
-	var args amqp.Table = amqp.Table{"x-dead-letter-exchange": routing.ExchangeDeadLetterFanout}
-
-	switch simpleQueueType {
-	case SimpleQueueDurable:
-		queue, err = channel.QueueDeclare(queueName, true, false, false, false, args)
-	case SimpleQueueTransient:
-		queue, err = channel.QueueDeclare(queueName, false, true, true, false, args)
-	default:
-		return nil, amqp.Queue{}, errors.New("wrong queue type")
-	}
-
-	if err != nil {
-		return nil, amqp.Queue{}, err
-	}
-
-	err = channel.QueueBind(queue.Name, key, exchange, false, nil)
-
-	if err != nil {
-		return nil, amqp.Queue{}, err
-	}
-
-	return channel, queue, nil
-}
-
 func SubscribeJSON[T any](
 	conn *amqp.Connection,
-	exchange, queueName,
+	exchange,
+	queueName,
 	key string,
 	simpleQueueType SimpleQueueType,
 	handler func(T) Acktype,
 ) error {
-	channel, queue, err := DeclareAndBind(conn, exchange, queueName, key, simpleQueueType)
-
+	ch, queue, err := DeclareAndBind(conn, exchange, queueName, key, simpleQueueType)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not declare and bind queue: %v", err)
 	}
 
-	deliveryChan, err := channel.Consume(queue.Name, "", false, false, false, false, nil)
-
+	msgs, err := ch.Consume(
+		queue.Name, // queue
+		"",         // consumer
+		false,      // auto-ack
+		false,      // exclusive
+		false,      // no-local
+		false,      // no-wait
+		nil,        // args
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not consume messages: %v", err)
+	}
+
+	unmarshaller := func(data []byte) (T, error) {
+		var target T
+		err := json.Unmarshal(data, &target)
+		return target, err
 	}
 
 	go func() {
-		for message := range deliveryChan {
-			var content T
-			err := json.Unmarshal(message.Body, &content)
+		defer ch.Close()
+		for msg := range msgs {
+			target, err := unmarshaller(msg.Body)
 			if err != nil {
-				log.Printf("Failed to unmarshal message: %v", err)
+				fmt.Printf("could not unmarshal message: %v\n", err)
 				continue
 			}
-			switch handler(content) {
+			switch handler(target) {
 			case Ack:
-				message.Ack(false)
-				fmt.Println("Ack")
+				msg.Ack(false)
 			case NackDiscard:
-				message.Nack(false, false)
-				fmt.Println("NackDiscard")
+				msg.Nack(false, false)
 			case NackRequeue:
-				message.Nack(false, true)
-				fmt.Println("NackRequeue")
+				msg.Nack(false, true)
 			}
 		}
 	}()
-
 	return nil
+}
+
+func DeclareAndBind(
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	simpleQueueType SimpleQueueType,
+) (*amqp.Channel, amqp.Queue, error) {
+	ch, err := conn.Channel()
+	if err != nil {
+		return nil, amqp.Queue{}, fmt.Errorf("could not create channel: %v", err)
+	}
+
+	queue, err := ch.QueueDeclare(
+		queueName,                             // name
+		simpleQueueType == SimpleQueueDurable, // durable
+		simpleQueueType != SimpleQueueDurable, // delete when unused
+		simpleQueueType != SimpleQueueDurable, // exclusive
+		false,                                 // no-wait
+		amqp.Table{
+			"x-dead-letter-exchange": "peril_dlx",
+		},
+	)
+	if err != nil {
+		return nil, amqp.Queue{}, fmt.Errorf("could not declare queue: %v", err)
+	}
+
+	err = ch.QueueBind(
+		queue.Name, // queue name
+		key,        // routing key
+		exchange,   // exchange
+		false,      // no-wait
+		nil,        // args
+	)
+	if err != nil {
+		return nil, amqp.Queue{}, fmt.Errorf("could not bind queue: %v", err)
+	}
+	return ch, queue, nil
 }

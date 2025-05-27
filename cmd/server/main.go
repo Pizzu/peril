@@ -20,17 +20,22 @@ func main() {
 	defer conn.Close()
 	fmt.Println("Peril game server connected to RabbitMQ!")
 
-	gameLogRoutingKey := fmt.Sprintf("%s.*", routing.GameLogSlug)
-	_, _, err = pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic, routing.GameLogSlug, gameLogRoutingKey, pubsub.SimpleQueueDurable)
-
-	if err != nil {
-		log.Fatalf("could not subscribe to gamelog: %v", err)
-	}
-
 	publishCh, err := conn.Channel()
 	if err != nil {
 		log.Fatalf("could not create channel: %v", err)
 	}
+
+	_, queue, err := pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug,
+		routing.GameLogSlug+".*",
+		pubsub.SimpleQueueDurable,
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to pause: %v", err)
+	}
+	fmt.Printf("Queue %v declared and bound!\n", queue.Name)
 
 	gamelogic.PrintServerHelp()
 
@@ -67,7 +72,7 @@ func main() {
 				log.Printf("could not publish time: %v", err)
 			}
 		case "quit":
-			gamelogic.PrintQuit()
+			log.Println("goodbye")
 			return
 		default:
 			fmt.Println("unknown command")
