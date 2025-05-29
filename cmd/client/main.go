@@ -8,6 +8,7 @@ import (
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/utils"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -33,35 +34,38 @@ func main() {
 	}
 	gs := gamelogic.NewGameState(username)
 
-	err = pubsub.SubscribeJSON(
+	err = pubsub.Subscribe(
 		conn,
 		routing.ExchangePerilTopic,
 		routing.ArmyMovesPrefix+"."+gs.GetUsername(),
 		routing.ArmyMovesPrefix+".*",
 		pubsub.SimpleQueueTransient,
 		handlerMove(gs, publishCh),
+		utils.UnmarshalJSON,
 	)
 	if err != nil {
 		log.Fatalf("could not subscribe to army moves: %v", err)
 	}
-	err = pubsub.SubscribeJSON(
+	err = pubsub.Subscribe(
 		conn,
 		routing.ExchangePerilTopic,
 		routing.WarRecognitionsPrefix,
 		routing.WarRecognitionsPrefix+".*",
 		pubsub.SimpleQueueDurable,
 		handlerWar(gs, publishCh),
+		utils.UnmarshalJSON,
 	)
 	if err != nil {
 		log.Fatalf("could not subscribe to war declarations: %v", err)
 	}
-	err = pubsub.SubscribeJSON(
+	err = pubsub.Subscribe(
 		conn,
 		routing.ExchangePerilDirect,
 		routing.PauseKey+"."+gs.GetUsername(),
 		routing.PauseKey,
 		pubsub.SimpleQueueTransient,
 		handlerPause(gs),
+		utils.UnmarshalJSON,
 	)
 	if err != nil {
 		log.Fatalf("could not subscribe to pause: %v", err)
